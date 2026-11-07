@@ -34,7 +34,7 @@ public class Match {
     // Controls passing decisions and prevents a player immediately
     // collecting the ball again after making a pass
     private final Random random = new Random();
-    private int ticksUntilPass = 70;
+    private int ticksUntilPass = 35;
     private Player recentPasser;
     private int recentPasserCooldown;
     private int possessionTicks;
@@ -49,8 +49,8 @@ public class Match {
     private int clearanceCooldown;
 
     private static final int MIN_TICKS_BEFORE_RANDOM_KICK = 30;
-    private static final int MAX_POSSESSION_TICKS = 120;
-    private static final int RANDOM_KICK_CHANCE = 180;
+    private static final int MAX_POSSESSION_TICKS = 80;
+    private static final int RANDOM_KICK_CHANCE = 240;
     private static final int STUCK_CHECK_TICKS = 45;
     private static final int MIN_PROGRESS_DISTANCE = 12;
     private static final int TRAFFIC_CHECK_TICKS = 22;
@@ -87,7 +87,7 @@ public class Match {
         players.clear();
         recentPasser = null;
         recentPasserCooldown = 0;
-        ticksUntilPass = 70;
+        ticksUntilPass = 35;
         possessionTicks = 0;
         trackedOwner = null;
         trackedOwnerTicks = 0;
@@ -314,8 +314,7 @@ public class Match {
                 if (collector != null) {
                     ball.setOwner(collector);
                     possessionTicks = 0;
-                    // Hold ball for roughly 1-2 seconds before pass
-                    ticksUntilPass = 50 + random.nextInt(70);
+                    ticksUntilPass = 25 + random.nextInt(30);
                 }
             } else {
                 ticksUntilPass--;
@@ -327,22 +326,25 @@ public class Match {
                         && random.nextInt(RANDOM_KICK_CHANCE) == 0;
                 boolean heldTooLong = possessionTicks >= MAX_POSSESSION_TICKS;
 
-                if (stuck) {
+                if (shouldShoot(passer)) {
+                    shootBall(passer);
+                    rememberKicker(passer);
+                    ticksUntilPass = 25 + random.nextInt(30);
+                } else if (stuck) {
                     kickBallOutOfTraffic(passer);
                     rememberKicker(passer);
-                    ticksUntilPass = 50 + random.nextInt(70);
+                    ticksUntilPass = 25 + random.nextInt(30);
                 } else if (randomKick || heldTooLong) {
-                    kickBallRandomly(passer);
+                    kickBallForward(passer);
                     rememberKicker(passer);
-                    ticksUntilPass = 50 + random.nextInt(70);
+                    ticksUntilPass = 25 + random.nextInt(30);
                 } else if (ticksUntilPass <= 0) {
-                    // ormal pass first, if nobody is available kick
                     if (!passBall(passer)) {
-                        kickBallRandomly(passer);
+                        kickBallForward(passer);
                     }
 
                     rememberKicker(passer);
-                    ticksUntilPass = 50 + random.nextInt(70);
+                    ticksUntilPass = 25 + random.nextInt(30);
                 }
             }
 
@@ -426,7 +428,7 @@ public class Match {
 
         recentPasser = null;
         recentPasserCooldown = 0;
-        ticksUntilPass = 70;
+        ticksUntilPass = 35;
         possessionTicks = 0;
         trafficTicks = 0;
         contestedTicks = 0;
@@ -493,7 +495,7 @@ public class Match {
         stunnedPlayers.put(playerWhoLostBall, STUN_TICKS);
 
         possessionTicks = 0;
-        ticksUntilPass = 50 + random.nextInt(70);
+        ticksUntilPass = 25 + random.nextInt(30);
     }
 
     private boolean isHome(Player p) {
@@ -622,6 +624,36 @@ public class Match {
         ball.kick(velocityX, velocityY);
     }
 
+    private boolean shouldShoot(Player player) {
+        int goalX = isHome(player) ? ScreenSize.width : 0;
+        return Math.abs(goalX - player.getX()) < 310
+                && Math.abs(player.getY() - ScreenSize.height / 2) < 210
+                && random.nextInt(22) == 0;
+    }
+
+    private void shootBall(Player player) {
+        int goalX = isHome(player) ? ScreenSize.width : 0;
+        int goalY = ScreenSize.height / 2 + random.nextInt(61) - 30;
+        kickTowards(goalX, goalY, 15);
+    }
+
+    private void kickBallForward(Player player) {
+        int direction = isHome(player) ? 1 : -1;
+        int targetX = clamp(ball.getX() + direction * (180 + random.nextInt(160)),
+                30, ScreenSize.width - 30);
+        int targetY = clamp(ball.getY() + random.nextInt(241) - 120,
+                35, ScreenSize.height - 35);
+        kickTowards(targetX, targetY, 10);
+    }
+
+    private void kickTowards(int targetX, int targetY, int speed) {
+        int dx = targetX - ball.getX();
+        int dy = targetY - ball.getY();
+        double distance = Math.max(1, distanceBetween(ball.getX(), ball.getY(), targetX, targetY));
+        ball.kick((int) Math.round(dx * speed / distance),
+                (int) Math.round(dy * speed / distance));
+    }
+
     private boolean isOwnerStuck(Player owner) {
         if (owner != trackedOwner) {
             trackedOwner = owner;
@@ -695,16 +727,15 @@ public class Match {
             return false;
         }
 
-        // Send the ball back into open space when players crowd it or trap it in a corner
+        // Clear the ball sideways or forward when players get crowded
         Player kicker = ball.getOwner();
-        int targetX = ScreenSize.width / 2 + random.nextInt(161) - 80;
-        int targetY = ScreenSize.height / 2 + random.nextInt(161) - 80;
-        int dx = targetX - ballX;
-        int dy = targetY - ballY;
-        double distance = Math.max(1, distanceBetween(ballX, ballY, targetX, targetY));
-        int speed = 10;
-        ball.kick((int) Math.round(dx * speed / distance),
-                (int) Math.round(dy * speed / distance));
+        int direction = kicker != null ? (isHome(kicker) ? 1 : -1)
+                : (ballX < ScreenSize.width / 2 ? 1 : -1);
+        int targetX = clamp(ballX + direction * (150 + random.nextInt(170)),
+                65, ScreenSize.width - 65);
+        int targetY = clamp(ballY + (ballY < ScreenSize.height / 2 ? 1 : -1)
+                * (90 + random.nextInt(150)), 65, ScreenSize.height - 65);
+        kickTowards(targetX, targetY, 11);
 
         if (kicker != null) rememberKicker(kicker);
         trafficTicks = 0;
@@ -719,24 +750,19 @@ public class Match {
         int targetY;
 
         if (random.nextBoolean()) {
-            targetX = clamp(kicker.getX() + random.nextInt(201) - 100, 45, ScreenSize.width - 45);
-            targetY = kicker.getY() < ScreenSize.height / 2 ? ScreenSize.height - 45 : 45;
+            int direction = isHome(kicker) ? 1 : -1;
+            targetX = clamp(kicker.getX() + direction * (130 + random.nextInt(150)),
+                    45, ScreenSize.width - 45);
+            targetY = clamp(kicker.getY() + random.nextInt(241) - 120,
+                    45, ScreenSize.height - 45);
         } else {
-            targetX = 45 + random.nextInt(ScreenSize.width - 90);
-            targetY = 45 + random.nextInt(ScreenSize.height - 90);
-            for (int attempt = 0; attempt < 6
-                    && distanceBetween(kicker.getX(), kicker.getY(), targetX, targetY) < 120; attempt++) {
-                targetX = 45 + random.nextInt(ScreenSize.width - 90);
-                targetY = 45 + random.nextInt(ScreenSize.height - 90);
-            }
+            targetX = clamp(kicker.getX() + random.nextInt(161) - 80,
+                    45, ScreenSize.width - 45);
+            targetY = kicker.getY() < ScreenSize.height / 2
+                    ? clamp(kicker.getY() + 180, 45, ScreenSize.height - 45)
+                    : clamp(kicker.getY() - 180, 45, ScreenSize.height - 45);
         }
-
-        int dx = targetX - ball.getX();
-        int dy = targetY - ball.getY();
-        double distance = Math.max(1, distanceBetween(ball.getX(), ball.getY(), targetX, targetY));
-        int speed = 8 + random.nextInt(3);
-        ball.kick((int) Math.round(dx * speed / distance),
-                (int) Math.round(dy * speed / distance));
+        kickTowards(targetX, targetY, 11);
     }
 
     private void rememberKicker(Player kicker) {
