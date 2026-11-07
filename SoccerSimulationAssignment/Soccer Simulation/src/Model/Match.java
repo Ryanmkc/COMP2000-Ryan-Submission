@@ -24,6 +24,7 @@ public class Match {
     private ArrayList<Actor> gameActors;
     private ArrayList<Player> players;
     private volatile boolean isRunning;
+    private volatile boolean isPaused;
     private Thread simulationThread;
 
     // Controls passing decisions and prevents a player immediately
@@ -54,12 +55,14 @@ public class Match {
         this.gameActors = new ArrayList<>();
         this.players = new ArrayList<>();
         this.isRunning = false;
+        this.isPaused = false;
     }
 
     // spawn entities
     public void setupAndStartSimulation(String homeFormation, String awayFormation) {
         // Stop an old loop before starting a new match
         stopSimulation();
+        isPaused = false;
 
         gameActors.clear();
         players.clear();
@@ -165,6 +168,10 @@ public class Match {
     // background engine checking frame
     private void runSimulationEngineLoop() {
         while (isRunning) {
+            if (isPaused) {
+                if (!pauseForNextFrame()) break;
+                continue;
+            }
             updateStunnedPlayers();
 
             // Briefly hold the reset formation after a goal before restarting
@@ -705,34 +712,26 @@ public class Match {
 
     public void stopSimulation() {
         this.isRunning = false;
+        this.isPaused = false;
 
         if (simulationThread != null && simulationThread != Thread.currentThread()) {
             simulationThread.interrupt();
         }
     }
 
+    public void pauseSimulation() {
+        isPaused = true;
+    }
+
+    public void resumeSimulation() {
+        if (isRunning) isPaused = false;
+    }
+
     // Called by TimerPanel when the match clock reaches 00:00
     public void finishMatch() {
         stopSimulation();
-
-        String result;
-
-        if (homeScore > awayScore) {
-            result = "HOME TEAM WINS!";
-        } else if (awayScore > homeScore) {
-            result = "AWAY TEAM WINS!";
-        } else {
-            result = "IT'S A DRAW!";
-        }
-
         pitch.setScore(homeScore, awayScore);
-
-        pitch.setMatchMessage(
-            "FULL TIME | HOME " + homeScore
-            + " - " + awayScore
-            + " AWAY | " + result
-        );
-
+        pitch.setMatchMessage("FULL TIME: HOME " + homeScore + " - " + awayScore + " AWAY");
         pitch.setActors(gameActors);
     }
 
