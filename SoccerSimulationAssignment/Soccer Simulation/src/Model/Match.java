@@ -37,10 +37,16 @@ public class Match {
     private Player recentPasser;
     private int recentPasserCooldown;
     private int possessionTicks;
+    private Player trackedOwner;
+    private int trackedOwnerX;
+    private int trackedOwnerY;
+    private int trackedOwnerTicks;
 
     private static final int MIN_TICKS_BEFORE_RANDOM_KICK = 30;
     private static final int MAX_POSSESSION_TICKS = 120;
     private static final int RANDOM_KICK_CHANCE = 180;
+    private static final int STUCK_CHECK_TICKS = 45;
+    private static final int MIN_PROGRESS_DISTANCE = 12;
 
     // Players briefly pause after losing possession
     private final Map<Player, Integer> stunnedPlayers = new HashMap<>();
@@ -73,6 +79,8 @@ public class Match {
         recentPasserCooldown = 0;
         ticksUntilPass = 70;
         possessionTicks = 0;
+        trackedOwner = null;
+        trackedOwnerTicks = 0;
         stunnedPlayers.clear();
         homeScore = 0;
         awayScore = 0;
@@ -279,6 +287,8 @@ public class Match {
 
             // collision: whichever eligible player is closest takes possession
             if (ball.getOwner() == null) {
+                trackedOwner = null;
+                trackedOwnerTicks = 0;
                 int pickupRadius = 18; // matches ~9px draw radius of circle, so they visually touch
                 Player collector = findPlayerTouchingBall(pickupRadius);
 
@@ -293,11 +303,16 @@ public class Match {
                 possessionTicks++;
 
                 Player passer = ball.getOwner();
+                boolean stuck = isOwnerStuck(passer);
                 boolean randomKick = possessionTicks >= MIN_TICKS_BEFORE_RANDOM_KICK
                         && random.nextInt(RANDOM_KICK_CHANCE) == 0;
                 boolean heldTooLong = possessionTicks >= MAX_POSSESSION_TICKS;
 
-                if (randomKick || heldTooLong) {
+                if (stuck) {
+                    kickBallOutOfTraffic(passer);
+                    rememberKicker(passer);
+                    ticksUntilPass = 50 + random.nextInt(70);
+                } else if (randomKick || heldTooLong) {
                     kickBallRandomly(passer);
                     rememberKicker(passer);
                     ticksUntilPass = 50 + random.nextInt(70);
@@ -585,10 +600,57 @@ public class Match {
         ball.kick(velocityX, velocityY);
     }
 
+    private boolean isOwnerStuck(Player owner) {
+        if (owner != trackedOwner) {
+            trackedOwner = owner;
+            trackedOwnerX = owner.getX();
+            trackedOwnerY = owner.getY();
+            trackedOwnerTicks = 0;
+            return false;
+        }
+
+        trackedOwnerTicks++;
+        if (trackedOwnerTicks < STUCK_CHECK_TICKS) return false;
+
+        double progress = distanceBetween(trackedOwnerX, trackedOwnerY, owner.getX(), owner.getY());
+        trackedOwnerX = owner.getX();
+        trackedOwnerY = owner.getY();
+        trackedOwnerTicks = 0;
+        return progress < MIN_PROGRESS_DISTANCE;
+    }
+
+    private void kickBallOutOfTraffic(Player kicker) {
+        // clear to a side or another area when the player cannot make progress
+        int targetX;
+        int targetY;
+
+        if (random.nextBoolean()) {
+            targetX = clamp(kicker.getX() + random.nextInt(201) - 100, 45, ScreenSize.width - 45);
+            targetY = kicker.getY() < ScreenSize.height / 2 ? ScreenSize.height - 45 : 45;
+        } else {
+            targetX = 45 + random.nextInt(ScreenSize.width - 90);
+            targetY = 45 + random.nextInt(ScreenSize.height - 90);
+            for (int attempt = 0; attempt < 6
+                    && distanceBetween(kicker.getX(), kicker.getY(), targetX, targetY) < 120; attempt++) {
+                targetX = 45 + random.nextInt(ScreenSize.width - 90);
+                targetY = 45 + random.nextInt(ScreenSize.height - 90);
+            }
+        }
+
+        int dx = targetX - ball.getX();
+        int dy = targetY - ball.getY();
+        double distance = Math.max(1, distanceBetween(ball.getX(), ball.getY(), targetX, targetY));
+        int speed = 8 + random.nextInt(3);
+        ball.kick((int) Math.round(dx * speed / distance),
+                (int) Math.round(dy * speed / distance));
+    }
+
     private void rememberKicker(Player kicker) {
         recentPasser = kicker;
         recentPasserCooldown = 12;
         possessionTicks = 0;
+        trackedOwner = null;
+        trackedOwnerTicks = 0;
     }
 
     private boolean passBall(Player passer) {
