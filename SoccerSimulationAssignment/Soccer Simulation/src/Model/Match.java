@@ -23,6 +23,8 @@ public class Match {
     // Main Arrays
     private ArrayList<Actor> gameActors;
     private ArrayList<Player> players;
+    private final PlayerMovementStrategy chaseStrategy = new ChaseStrategy();
+    private final PlayerMovementStrategy formationStrategy = new FormationStrategy();
     private volatile boolean isRunning;
     private volatile boolean isPaused;
     private Thread simulationThread;
@@ -232,20 +234,20 @@ public class Match {
                         updateGoalkeeper(p, ballY);
                     } else if (owner == null) {
                         if (p == homeChaser || p == awayChaser) {
-                            moveToward(p, ballX, ballY, 2);
+                            chaseStrategy.move(this, p, ballX, ballY);
                         } else {
                             // Everyone else shuffles with the play but keeps formation
-                            moveIntoShape(p, ballX, ballY);
+                            formationStrategy.move(this, p, ballX, ballY);
                         }
                     } else if (p == owner) {
                         // The player in possession dribbles toward the opposing goal
                         int direction = isHome(p) ? 1 : -1;
                         moveToward(p, p.getX() + (direction * 25), p.getY(), 1);
                     } else if (p == presser) {
-                        moveToward(p, owner.getX(), owner.getY(), 2);
+                        chaseStrategy.move(this, p, owner.getX(), owner.getY());
                     } else {
                         // Everyone else shuffles with the play but keeps formation
-                        moveIntoShape(p, ballX, ballY);
+                        formationStrategy.move(this, p, ballX, ballY);
                     }
                 } catch (InvalidPositionException e) {
                     // This player's move would have taken them off the pitch —
@@ -463,7 +465,7 @@ public class Match {
         return Math.max(min, Math.min(max, value));
     }
 
-    private void moveToward(Player p, int targetX, int targetY, int speed) {
+    void moveToward(Player p, int targetX, int targetY, int speed) {
         if (p.getX() < targetX) {
             p.moveRight(Math.min(speed, targetX - p.getX()));
         } else if (p.getX() > targetX) {
@@ -478,7 +480,7 @@ public class Match {
     }
 
     // Players move with the play without abandoning their original positions
-    private void moveIntoShape(Player p, int ballX, int ballY) {
+    void moveIntoShape(Player p, int ballX, int ballY) {
         int centerX = ScreenSize.width / 2;
         int centerY = ScreenSize.height / 2;
 
