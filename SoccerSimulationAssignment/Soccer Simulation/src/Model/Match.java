@@ -15,6 +15,7 @@ import java.awt.*;
 import javax.swing.*;
 import Rendering.ScreenSize;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Match {
     public SoccerPitch pitch;
@@ -217,8 +218,9 @@ public class Match {
 
             if (owner == null) {
                 // Only the closest outfield player from each team chase loose ball
-                homeChaser = findClosestPlayer(true, ballX, ballY);
-                awayChaser = findClosestPlayer(false, ballX, ballY);
+                Map<Boolean, Optional<Player>> closestPlayers = findClosestPlayersByTeam(ballX, ballY);
+                homeChaser = closestPlayers.getOrDefault(true, Optional.empty()).orElse(null);
+                awayChaser = closestPlayers.getOrDefault(false, Optional.empty()).orElse(null);
             } else {
                 // When ball is owned, closest opponent presses
                 presser = findClosestOpponent(owner);
@@ -517,45 +519,22 @@ public class Match {
         moveToward(p, targetX, targetY, 1);
     }
 
-    private Player findClosestPlayer(boolean homeTeam, int targetX, int targetY) {
-        Player closest = null;
-        double closestDistance = Double.MAX_VALUE;
-
-        for (Player p : players) {
-            if (p.isGoalkeeper() || isStunned(p) || isHome(p) != homeTeam) {
-                continue;
-            }
-
-            double distance = distanceBetween(p.getX(), p.getY(), targetX, targetY);
-
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closest = p;
-            }
-        }
-
-        return closest;
+    private Map<Boolean, Optional<Player>> findClosestPlayersByTeam(int targetX, int targetY) {
+        // group eligible players by team and find each team's closest player
+        return players.stream()
+                .filter(p -> !p.isGoalkeeper() && !isStunned(p))
+                .collect(Collectors.groupingBy(this::isHome,
+                        Collectors.minBy(Comparator.comparingDouble(p ->
+                                distanceBetween(p.getX(), p.getY(), targetX, targetY)))));
     }
 
     private Player findClosestOpponent(Player owner) {
-        Player closest = null;
-        double closestDistance = Double.MAX_VALUE;
         boolean ownerIsHome = isHome(owner);
-
-        for (Player p : players) {
-            if (p.isGoalkeeper() || isStunned(p) || isHome(p) == ownerIsHome) {
-                continue;
-            }
-
-            double distance = distanceBetween(p.getX(), p.getY(), owner.getX(), owner.getY());
-
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closest = p;
-            }
-        }
-
-        return closest;
+        return players.stream()
+                .filter(p -> !p.isGoalkeeper() && !isStunned(p) && isHome(p) != ownerIsHome)
+                .min(Comparator.comparingDouble(p ->
+                        distanceBetween(p.getX(), p.getY(), owner.getX(), owner.getY())))
+                .orElse(null);
     }
 
     private Player findPlayerTouchingBall(int pickupRadius) {
