@@ -57,6 +57,8 @@ NEEDS:
      JFrame frame;
      Menus currentMenu;
      CircleList<String> formationCircle;
+     CircleList<String> homeFormationCircle;
+     CircleList<String> awayFormationCircle;
      CircleList<String> sidesCircle;
      SoccerPitch pitch;
      VerticalPitch vertPitch;
@@ -70,7 +72,9 @@ NEEDS:
          frame.setSize(ScreenSize.width, ScreenSize.height);
          frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
          frame.setLocationRelativeTo(null);
-         formationCircle = new CircleList<>(new String[] { "4-4-2", "4-3-3", "3-5-2" });
+         homeFormationCircle = new CircleList<>(new String[] { "4-4-2", "4-3-3", "3-5-2" });
+         awayFormationCircle = new CircleList<>(new String[] { "4-4-2", "4-3-3", "3-5-2" });
+         formationCircle = homeFormationCircle;
          sidesCircle = new CircleList<>(new String[] { "Home", "Away" });
          pitch = new SoccerPitch();
          vertPitch = new VerticalPitch();
@@ -362,12 +366,16 @@ NEEDS:
  
          swapPrevBtn.addActionListener(e -> {
              window.vertPitch.swapSides(window);
+             formationCircle = window.formationCircle;
+             formationLabel.setText(formationCircle.getCurrent());
              swapLabel.setText(sidesCircle.getCurrent().toString());
              window.vertPitch.drawPlayers(window);
          });
  
          swapNextBtn.addActionListener(e -> {
              window.vertPitch.swapSides(window);
+             formationCircle = window.formationCircle;
+             formationLabel.setText(formationCircle.getCurrent());
              swapLabel.setText(sidesCircle.getCurrent().toString());
              window.vertPitch.drawPlayers(window);
          });
@@ -480,7 +488,7 @@ NEEDS:
          match = new Match();
          window.activeSimulation = this;
  
-         match.setupAndStartSimulation(window.formationCircle.getCurrent(), window.formationCircle.getCurrent());
+         match.setupAndStartSimulation(window.homeFormationCircle.getCurrent(), window.awayFormationCircle.getCurrent());
  
  
          JButton menuButton = new JButton("Menu");
@@ -774,6 +782,10 @@ NEEDS:
              sideColour = Color.BLUE;
              window.sidesCircle.next();
          }
+
+         // keep each team's formation when switching sides
+         window.formationCircle = window.sidesCircle.getCurrent().equals("Home")
+                 ? window.homeFormationCircle : window.awayFormationCircle;
  
      }
  
