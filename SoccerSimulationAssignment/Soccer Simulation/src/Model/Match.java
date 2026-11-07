@@ -45,6 +45,7 @@ public class Match {
     private int trafficAnchorX;
     private int trafficAnchorY;
     private int trafficTicks;
+    private int contestedTicks;
     private int clearanceCooldown;
 
     private static final int MIN_TICKS_BEFORE_RANDOM_KICK = 30;
@@ -52,9 +53,10 @@ public class Match {
     private static final int RANDOM_KICK_CHANCE = 180;
     private static final int STUCK_CHECK_TICKS = 45;
     private static final int MIN_PROGRESS_DISTANCE = 12;
-    private static final int TRAFFIC_CHECK_TICKS = 32;
-    private static final int CORNER_CHECK_TICKS = 20;
-    private static final int CLEARANCE_COOLDOWN = 55;
+    private static final int TRAFFIC_CHECK_TICKS = 22;
+    private static final int CONTESTED_CHECK_TICKS = 16;
+    private static final int CORNER_CHECK_TICKS = 16;
+    private static final int CLEARANCE_COOLDOWN = 45;
 
     // Players briefly pause after losing possession
     private final Map<Player, Integer> stunnedPlayers = new HashMap<>();
@@ -90,6 +92,7 @@ public class Match {
         trackedOwner = null;
         trackedOwnerTicks = 0;
         trafficTicks = 0;
+        contestedTicks = 0;
         clearanceCooldown = 0;
         stunnedPlayers.clear();
         homeScore = 0;
@@ -426,6 +429,7 @@ public class Match {
         ticksUntilPass = 70;
         possessionTicks = 0;
         trafficTicks = 0;
+        contestedTicks = 0;
         clearanceCooldown = 0;
         stunnedPlayers.clear();
     }
@@ -644,8 +648,22 @@ public class Match {
         if (clearanceCooldown > 0) {
             clearanceCooldown--;
             trafficTicks = 0;
+            contestedTicks = 0;
             return false;
         }
+
+        Player owner = ball.getOwner();
+        boolean contested = false;
+        if (owner != null) {
+            for (Player player : players) {
+                if (player != owner && isHome(player) != isHome(owner)
+                        && distanceBetween(player.getX(), player.getY(), owner.getX(), owner.getY()) < 30) {
+                    contested = true;
+                    break;
+                }
+            }
+        }
+        contestedTicks = contested ? contestedTicks + 1 : 0;
 
         if (trafficTicks == 0) {
             trafficAnchorX = ballX;
@@ -656,13 +674,14 @@ public class Match {
                 && (ballY < 85 || ballY > ScreenSize.height - 85);
         int neededTicks = nearCorner ? CORNER_CHECK_TICKS : TRAFFIC_CHECK_TICKS;
 
-        if (distanceBetween(trafficAnchorX, trafficAnchorY, ballX, ballY) > 35) {
+        if (distanceBetween(trafficAnchorX, trafficAnchorY, ballX, ballY) > 45) {
             trafficTicks = 0;
-            return false;
+            trafficAnchorX = ballX;
+            trafficAnchorY = ballY;
         }
 
         trafficTicks++;
-        if (trafficTicks < neededTicks) return false;
+        if (trafficTicks < neededTicks && contestedTicks < CONTESTED_CHECK_TICKS) return false;
 
         int nearbyPlayers = 0;
         for (Player player : players) {
@@ -671,7 +690,7 @@ public class Match {
             }
         }
 
-        if (!nearCorner && nearbyPlayers < 2) {
+        if (!nearCorner && nearbyPlayers < 2 && contestedTicks < CONTESTED_CHECK_TICKS) {
             trafficTicks = 0;
             return false;
         }
@@ -689,6 +708,7 @@ public class Match {
 
         if (kicker != null) rememberKicker(kicker);
         trafficTicks = 0;
+        contestedTicks = 0;
         clearanceCooldown = CLEARANCE_COOLDOWN;
         return true;
     }
