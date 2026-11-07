@@ -1,3 +1,4 @@
+
 // WILLIAM + RYAN IS DOING THIS
 /*
  * use the display already made in the soccer pitch class,
@@ -41,12 +42,19 @@ public class Match {
     private int trackedOwnerX;
     private int trackedOwnerY;
     private int trackedOwnerTicks;
+    private int trafficAnchorX;
+    private int trafficAnchorY;
+    private int trafficTicks;
+    private int clearanceCooldown;
 
     private static final int MIN_TICKS_BEFORE_RANDOM_KICK = 30;
     private static final int MAX_POSSESSION_TICKS = 120;
     private static final int RANDOM_KICK_CHANCE = 180;
     private static final int STUCK_CHECK_TICKS = 45;
     private static final int MIN_PROGRESS_DISTANCE = 12;
+    private static final int TRAFFIC_CHECK_TICKS = 32;
+    private static final int CORNER_CHECK_TICKS = 20;
+    private static final int CLEARANCE_COOLDOWN = 55;
 
     // Players briefly pause after losing possession
     private final Map<Player, Integer> stunnedPlayers = new HashMap<>();
@@ -81,6 +89,8 @@ public class Match {
         possessionTicks = 0;
         trackedOwner = null;
         trackedOwnerTicks = 0;
+        trafficTicks = 0;
+        clearanceCooldown = 0;
         stunnedPlayers.clear();
         homeScore = 0;
         awayScore = 0;
@@ -278,6 +288,12 @@ public class Match {
                 System.out.println(e.getMessage());
             }
 
+            if (clearBallFromTraffic()) {
+                pitch.setActors(gameActors);
+                if (!pauseForNextFrame()) break;
+                continue;
+            }
+
             if (recentPasserCooldown > 0) {
                 recentPasserCooldown--;
                 if (recentPasserCooldown == 0) {
@@ -409,6 +425,8 @@ public class Match {
         recentPasserCooldown = 0;
         ticksUntilPass = 70;
         possessionTicks = 0;
+        trafficTicks = 0;
+        clearanceCooldown = 0;
         stunnedPlayers.clear();
     }
 
@@ -617,6 +635,62 @@ public class Match {
         trackedOwnerY = owner.getY();
         trackedOwnerTicks = 0;
         return progress < MIN_PROGRESS_DISTANCE;
+    }
+
+    private boolean clearBallFromTraffic() {
+        int ballX = ball.getX();
+        int ballY = ball.getY();
+
+        if (clearanceCooldown > 0) {
+            clearanceCooldown--;
+            trafficTicks = 0;
+            return false;
+        }
+
+        if (trafficTicks == 0) {
+            trafficAnchorX = ballX;
+            trafficAnchorY = ballY;
+        }
+
+        boolean nearCorner = (ballX < 85 || ballX > ScreenSize.width - 85)
+                && (ballY < 85 || ballY > ScreenSize.height - 85);
+        int neededTicks = nearCorner ? CORNER_CHECK_TICKS : TRAFFIC_CHECK_TICKS;
+
+        if (distanceBetween(trafficAnchorX, trafficAnchorY, ballX, ballY) > 35) {
+            trafficTicks = 0;
+            return false;
+        }
+
+        trafficTicks++;
+        if (trafficTicks < neededTicks) return false;
+
+        int nearbyPlayers = 0;
+        for (Player player : players) {
+            if (distanceBetween(player.getX(), player.getY(), ballX, ballY) < 45) {
+                nearbyPlayers++;
+            }
+        }
+
+        if (!nearCorner && nearbyPlayers < 2) {
+            trafficTicks = 0;
+            return false;
+        }
+
+        // Send the ball back into open space when players crowd it or trap it in a corner
+        Player kicker = ball.getOwner();
+        int targetX = ScreenSize.width / 2 + random.nextInt(161) - 80;
+        int targetY = ScreenSize.height / 2 + random.nextInt(161) - 80;
+        int dx = targetX - ballX;
+        int dy = targetY - ballY;
+        double distance = Math.max(1, distanceBetween(ballX, ballY, targetX, targetY));
+        int speed = 10;
+        ball.kick((int) Math.round(dx * speed / distance),
+                (int) Math.round(dy * speed / distance));
+
+        if (kicker != null) rememberKicker(kicker);
+        trafficTicks = 0;
+        clearanceCooldown = CLEARANCE_COOLDOWN;
+        return true;
     }
 
     private void kickBallOutOfTraffic(Player kicker) {
@@ -833,3 +907,6 @@ class Team {
     public Player[] getPlayers() { return players; }
     public void setPlayers(Player[] players) { this.players = players; }
 }
+
+
+
