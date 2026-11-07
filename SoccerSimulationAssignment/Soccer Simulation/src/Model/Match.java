@@ -34,7 +34,7 @@ public class Match {
     // Controls passing decisions and prevents a player immediately
     // collecting the ball again after making a pass
     private final Random random = new Random();
-    private int ticksUntilPass = 35;
+    private int ticksUntilPass = 50;
     private Player recentPasser;
     private int recentPasserCooldown;
     private int possessionTicks;
@@ -49,7 +49,7 @@ public class Match {
     private int clearanceCooldown;
 
     private static final int MIN_TICKS_BEFORE_RANDOM_KICK = 30;
-    private static final int MAX_POSSESSION_TICKS = 80;
+    private static final int MAX_POSSESSION_TICKS = 105;
     private static final int RANDOM_KICK_CHANCE = 240;
     private static final int STUCK_CHECK_TICKS = 45;
     private static final int MIN_PROGRESS_DISTANCE = 12;
@@ -87,7 +87,7 @@ public class Match {
         players.clear();
         recentPasser = null;
         recentPasserCooldown = 0;
-        ticksUntilPass = 35;
+        ticksUntilPass = 50;
         possessionTicks = 0;
         trackedOwner = null;
         trackedOwnerTicks = 0;
@@ -314,7 +314,7 @@ public class Match {
                 if (collector != null) {
                     ball.setOwner(collector);
                     possessionTicks = 0;
-                    ticksUntilPass = 25 + random.nextInt(30);
+                    ticksUntilPass = 40 + random.nextInt(35);
                 }
             } else {
                 ticksUntilPass--;
@@ -329,22 +329,22 @@ public class Match {
                 if (shouldShoot(passer)) {
                     shootBall(passer);
                     rememberKicker(passer);
-                    ticksUntilPass = 25 + random.nextInt(30);
+                    ticksUntilPass = 40 + random.nextInt(35);
                 } else if (stuck) {
                     kickBallOutOfTraffic(passer);
                     rememberKicker(passer);
-                    ticksUntilPass = 25 + random.nextInt(30);
+                    ticksUntilPass = 40 + random.nextInt(35);
                 } else if (randomKick || heldTooLong) {
                     kickBallForward(passer);
                     rememberKicker(passer);
-                    ticksUntilPass = 25 + random.nextInt(30);
+                    ticksUntilPass = 40 + random.nextInt(35);
                 } else if (ticksUntilPass <= 0) {
                     if (!passBall(passer)) {
                         kickBallForward(passer);
                     }
 
                     rememberKicker(passer);
-                    ticksUntilPass = 25 + random.nextInt(30);
+                    ticksUntilPass = 40 + random.nextInt(35);
                 }
             }
 
@@ -428,7 +428,7 @@ public class Match {
 
         recentPasser = null;
         recentPasserCooldown = 0;
-        ticksUntilPass = 35;
+        ticksUntilPass = 50;
         possessionTicks = 0;
         trafficTicks = 0;
         contestedTicks = 0;
@@ -495,7 +495,7 @@ public class Match {
         stunnedPlayers.put(playerWhoLostBall, STUN_TICKS);
 
         possessionTicks = 0;
-        ticksUntilPass = 25 + random.nextInt(30);
+        ticksUntilPass = 40 + random.nextInt(35);
     }
 
     private boolean isHome(Player p) {
@@ -626,15 +626,16 @@ public class Match {
 
     private boolean shouldShoot(Player player) {
         int goalX = isHome(player) ? ScreenSize.width : 0;
-        return Math.abs(goalX - player.getX()) < 310
-                && Math.abs(player.getY() - ScreenSize.height / 2) < 210
-                && random.nextInt(22) == 0;
+        return possessionTicks >= 18
+                && Math.abs(goalX - player.getX()) < 200
+                && Math.abs(player.getY() - ScreenSize.height / 2) < 160
+                && random.nextInt(100) == 0;
     }
 
     private void shootBall(Player player) {
         int goalX = isHome(player) ? ScreenSize.width : 0;
         int goalY = ScreenSize.height / 2 + random.nextInt(61) - 30;
-        kickTowards(goalX, goalY, 15);
+        kickTowards(goalX, goalY, 12);
     }
 
     private void kickBallForward(Player player) {
